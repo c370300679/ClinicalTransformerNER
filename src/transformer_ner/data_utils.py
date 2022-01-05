@@ -83,7 +83,7 @@ class TransformerNerDataProcessor(object):
             label2idx = {'O': 3, 'X': 2, 'PAD': 0, 'CLS': 1}
         else:
             if customized_label2idx:
-                self.logger.warning('''The customized label2idx may not be compatible with the output check; 
+                self.logger.warning('''The customized label2idx may not be compatible with the output check;
 Make sure all the control labels' indexes are smaller than the index of label O;
 Otherwise will cause prediction error.''')
                 label2idx = customized_label2idx
@@ -109,6 +109,48 @@ Otherwise will cause prediction error.''')
             guide = "{}-{}".format(set_type, i)
             examples.append(InputExample(guide=guide, text=sentence, label=label, offsets=offsets))
         return examples
+
+    def _read_sents(self, sents, task = 'test'):
+        assert task in ('test'), 'task should be test'
+        txt = sents
+        if len(txt)<1:
+            warnings.warn(f"{file_name} is an empty file.")
+            return [], set()
+        nsents, unique_labels = [], set()
+        sents = txt.split("\n\n")
+        for i, sent in enumerate(sents):
+            nsent, offsets, labels = [], [], []
+            words = sent.split("\n")
+            for j, word in enumerate(words):
+                word_info = word.split(" ")
+                if len(word_info) < 2:
+                    warnings.warn("""
+                    The word at [line: {} pos: {}] has no position or label information.
+                    This word will cause potential runtime error.
+                    Check if you have extra empty line between two sentences in the BIO files.
+                    To avoid runtime error, we skip this word.
+                    If skipping is not correct, please check the data_utils.py at line 130.""".format(i+1, j+1),
+                                  RuntimeWarning)
+                    continue
+                nsent.append(word_info[0])
+                if self.has_offset_info:
+                    warnings.warn("""
+                    In the BIO data, we require to record two sets of offsets (4 numbers) after token text.
+                    e.g., Record 0 4 0 4 O
+                    In the example, the first two numbers are original offsets,
+                    the second two numbers are new offsets after pre-processing.
+                    If your do not conduct pre-processing and only use the original offsets,
+                    you can just set new offsets after pre-processing as original offsets to avoid index error.""")
+                    offsets.append((word_info[1], word_info[2], word_info[3], word_info[4]))
+                if task == "train":
+                    unique_labels.add(word_info[-1])
+                    labels.append(word_info[-1])
+                else:
+                    labels.append("O")
+            nsents.append((nsent, offsets, labels))
+        self._create_examples(nsents, 'test')
+#         return nsents, unique_labels
+        return self._create_examples(nsents, 'test')
 
     def _read_data(self, file_name, task='train'):
         """
@@ -243,7 +285,7 @@ def __seq2fea(new_tokens, new_labels, guards, tokenizer, max_seq_length, label2i
 
     assert len(new_tokens) + len(new_token_ids) + len(label_ids) + len(segment_ids) + len(masks) == 5 * max_seq_length, \
         f'''
-            check feature generation; expect all data len = {max_seq_length} but 
+            check feature generation; expect all data len = {max_seq_length} but
             tokens: {len(new_tokens)},
             token_ids: {len(new_token_ids)}
             labels: {len(label_ids)},
@@ -305,7 +347,7 @@ def _transformer_convert_data_to_features_helper(args, raw_tokens, labels, guide
 Sentence after tokenization is too long (expect less than {max_seq_length - 2} but got {tlen}).
 You have to increase max_seq_length to make sure every sentence after tokenization is not longer than the max_seq_length.
 Or you can further split you long sentences into shorter ones. We will defaultly segment the sentence to two or more seqs with length as (~max_seq_len * n + rest).
-The extra long sentence: 
+The extra long sentence:
 {' '.join(raw_tokens)}
 ''')
         while tlen > max_seq_length - shifts:

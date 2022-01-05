@@ -227,7 +227,7 @@ def train(args, model, train_features, dev_features):
             model.train()
             batch = tuple(b.to(args.device) for b in batch)
             train_inputs = batch_to_model_inputs(batch, args.model_type)
-            
+
             if args.fp16:
                 with autocast():
                     _, _, loss = model(**train_inputs)
@@ -241,7 +241,7 @@ def train(args, model, train_features, dev_features):
                 scaler.scale(loss).backward()
             else:
                 loss.backward()
-            
+
             if (step + 1) % args.gradient_accumulation_steps == 0:
                 if args.fp16:
                     scaler.unscale_(optimizer)
@@ -251,10 +251,10 @@ def train(args, model, train_features, dev_features):
                 else:
                     torch.nn.utils.clip_grad_norm_(model.parameters(), args.max_grad_norm)
                     optimizer.step()
-                
+
                 if args.do_warmup:
                     scheduler.step()
-                
+
                 model.zero_grad()
                 global_step += 1
 
@@ -264,10 +264,10 @@ def train(args, model, train_features, dev_features):
                 best_score, eval_loss = evaluate(
                     args, model, new_model_dir, dev_features, epoch, global_step, best_score)
                 args.logger.info("""
-                Global step: {}; 
-                Epoch: {}; 
-                average_train_loss: {:.4f}; 
-                eval_loss: {:.4f}; 
+                Global step: {};
+                Epoch: {};
+                average_train_loss: {:.4f};
+                eval_loss: {:.4f};
                 current best score: {:.4f}""".format(
                     global_step, epoch+1, round(tr_loss / global_step, 4), eval_loss, best_score))
 
@@ -276,10 +276,10 @@ def train(args, model, train_features, dev_features):
             best_score, eval_loss = evaluate(
                 args, model, new_model_dir, dev_features, epoch, global_step, best_score)
             args.logger.info("""
-                Global step: {}; 
-                Epoch: {}; 
-                average_train_loss: {:.4f}; 
-                eval_loss: {:.4f}; 
+                Global step: {};
+                Epoch: {};
+                average_train_loss: {:.4f};
+                eval_loss: {:.4f};
                 current best score: {:.4f}""".format(
                     global_step, epoch+1, round(tr_loss / global_step, 4), eval_loss, best_score))
 
@@ -346,7 +346,7 @@ def _eval(args, model, features):
         for mks, lbs, lgts, gds in zip(original_mask, original_labels, raw_logits, guards):
             connect_sent_flag = False
             for mk, lb, lgt, gd in zip(mks, lbs, lgts, gds):
-                if mk == 0:  
+                if mk == 0:
                     # after hit first mask, we can stop for the current sentence since all rest will be pad
                     if args.model_type == "xlnet":
                         continue
@@ -387,10 +387,10 @@ def evaluate(args, model, new_model_dir, features, epoch, global_step, best_scor
     # if best_score < cur_score:
     if cur_score - best_score > 0.00005:
         args.logger.info('''
-        Global step: {}; 
-        Epoch: {}; 
-        previous best score: {:.4f}; 
-        new best score: {:.4f}; 
+        Global step: {};
+        Epoch: {};
+        previous best score: {:.4f};
+        new best score: {:.4f};
         full evaluation metrix: {}
         '''.format(global_step, epoch+1, best_score, cur_score, eval_metrix))
         best_score = cur_score
@@ -444,6 +444,23 @@ def predict(args, model, features):
     return fixed_preds
 
 
+def _output_bio_without_storage(args, tests, preds):
+    new_sents = []
+    assert len(tests) == len(preds), "Expect {} sents but get {} sents in prediction".format(len(tests), len(preds))
+    for example, predicted_labels in zip(tests, preds):
+        tokens = example.text
+        assert len(tokens) == len(predicted_labels), "Not same length sentence\nExpect: {} {}\nBut: {} {}".format(
+            len(tokens), tokens, len(predicted_labels), predicted_labels)
+        offsets = example.offsets
+        if offsets:
+            new_sent = [(tk, ofs[0], ofs[1], ofs[2], ofs[3], lb) for tk, ofs, lb in zip(tokens, offsets, predicted_labels)]
+        else:
+            new_sent = [(tk, lb) for tk, lb in zip(tokens, predicted_labels)]
+        if new_sent!=[]:
+            new_sents.append(new_sent)
+    return new_sents
+
+
 def _output_bio(args, tests, preds):
     new_sents = []
     assert len(tests) == len(preds), "Expect {} sents but get {} sents in prediction".format(len(tests), len(preds))
@@ -459,7 +476,7 @@ def _output_bio(args, tests, preds):
         new_sents.append(new_sent)
 
     output_bio(new_sents, args.predict_output_file)
-    args.logger.warning("""The output file is {}, we recommend to use suffix as .bio.txt or .txt. 
+    args.logger.warning("""The output file is {}, we recommend to use suffix as .bio.txt or .txt.
             You can directly use formatter coverter tool in this package.""".format(
         args.predict_output_file))
 
@@ -479,8 +496,8 @@ def run_task(args):
 
     if os.path.exists(args.new_model_dir) and os.listdir(args.new_model_dir) and args.do_train and not args.overwrite_model_dir:
         raise ValueError(
-            """new model directory: {} exists. 
-            Use --overwrite_model_dir to overwrite the previous model. 
+            """new model directory: {} exists.
+            Use --overwrite_model_dir to overwrite the previous model.
             Or create another directory for the new model""".format(args.new_model_dir))
 
     # init data processor
@@ -524,7 +541,7 @@ def run_task(args):
         if args.pretrained_model == "microsoft/deberta-xlarge-v2":
             raise NotImplementedError("""the deberta-xlarge-v2 tokenizer is different from other deberta models
             the support for deberta-xlarge-v2 is not implemented.
-            you can try other debata models: microsoft/deberta-base, 
+            you can try other debata models: microsoft/deberta-base,
             microsoft/deberta-large, microsoft/deberta-xlarge""")
 
         model = model_model.from_pretrained(args.pretrained_model, config=config)
